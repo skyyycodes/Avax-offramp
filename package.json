@@ -15,6 +15,7 @@
     "@walletconnect/react-native-compat": "^2.23.4",
     "ethers": "^6.16.0",
     "expo": "~54.0.33",
+    "expo-camera": "^17.0.10",
     "expo-clipboard": "^8.0.8",
     "expo-linear-gradient": "^15.0.8",
     "expo-secure-store": "^15.0.8",
@@ -22,6 +23,7 @@
     "react": "19.1.0",
     "react-native": "0.81.5",
     "react-native-get-random-values": "^2.0.0",
+    "react-native-qrcode-svg": "^6.3.21",
     "react-native-svg": "^15.15.3"
   },
   "devDependencies": {

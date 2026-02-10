@@ -6,6 +6,8 @@ import { useState, useEffect } from 'react';
 import { ethers } from 'ethers';
 import * as SecureStore from 'expo-secure-store';
 import * as Clipboard from 'expo-clipboard';
+import QRCode from 'react-native-qrcode-svg';
+import { CameraView, useCameraPermissions } from 'expo-camera';
 
 const { width, height } = Dimensions.get('window');
 
@@ -32,11 +34,19 @@ export default function App() {
   const [balance, setBalance] = useState<string>('0.00');
   const [isLoading, setIsLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
-  const [modalType, setModalType] = useState<'create' | 'import' | 'settings' | null>(null);
+  const [modalType, setModalType] = useState<'create' | 'import' | 'settings' | 'receive' | 'send' | null>(null);
   const [importKey, setImportKey] = useState('');
   const [network, setNetwork] = useState<'mainnet' | 'testnet'>('mainnet');
   const [showPrivateKey, setShowPrivateKey] = useState(false);
   const [showSeedPhrase, setShowSeedPhrase] = useState(false);
+  
+  // Send transaction states
+  const [recipientAddress, setRecipientAddress] = useState('');
+  const [sendAmount, setSendAmount] = useState('');
+  const [showScanner, setShowScanner] = useState(false);
+  const [sendStep, setSendStep] = useState<'address' | 'amount'>('address');
+  const [permission, requestPermission] = useCameraPermissions();
+  const [isSending, setIsSending] = useState(false);
 
   useEffect(() => {
     loadWallet();
@@ -172,11 +182,90 @@ export default function App() {
     Alert.alert('Copied', `${label} copied to clipboard`);
   };
 
-  const openModal = (type: 'create' | 'import' | 'settings') => {
+  const openModal = (type: 'create' | 'import' | 'settings' | 'receive' | 'send') => {
     setModalType(type);
     setShowModal(true);
     setShowPrivateKey(false);
     setShowSeedPhrase(false);
+    if (type === 'send') {
+      setSendStep('address');
+      setRecipientAddress('');
+      setSendAmount('');
+      setShowScanner(false);
+    }
+  };
+
+  const handleQRScanned = ({ data }: { data: string }) => {
+    setShowScanner(false);
+    // Check if it's a valid Ethereum address
+    if (ethers.isAddress(data)) {
+      setRecipientAddress(data);
+    } else {
+      Alert.alert('Invalid QR Code', 'The scanned QR code does not contain a valid address');
+    }
+  };
+
+  const validateAndProceedToAmount = () => {
+    if (!ethers.isAddress(recipientAddress)) {
+      Alert.alert('Invalid Address', 'Please enter a valid Ethereum address');
+      return;
+    }
+    setSendStep('amount');
+  };
+
+  const sendTransaction = async () => {
+    if (!wallet || !recipientAddress || !sendAmount) return;
+
+    const amount = parseFloat(sendAmount);
+    if (isNaN(amount) || amount <= 0) {
+      Alert.alert('Invalid Amount', 'Please enter a valid amount');
+      return;
+    }
+
+    if (amount > parseFloat(balance)) {
+      Alert.alert('Insufficient Balance', 'You do not have enough AVAX');
+      return;
+    }
+
+    Alert.alert(
+      'Confirm Transaction',
+      `Send ${sendAmount} AVAX to\n${recipientAddress.slice(0, 6)}...${recipientAddress.slice(-4)}?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Send',
+          onPress: async () => {
+            setIsSending(true);
+            try {
+              const provider = new ethers.JsonRpcProvider(NETWORKS[network].rpc);
+              const walletWithProvider = wallet.connect(provider);
+              
+              const tx = await walletWithProvider.sendTransaction({
+                to: recipientAddress,
+                value: ethers.parseEther(sendAmount),
+              });
+
+              Alert.alert('Transaction Sent', `Transaction hash:\n${tx.hash.slice(0, 10)}...`, [
+                {
+                  text: 'OK',
+                  onPress: () => {
+                    setShowModal(false);
+                    setRecipientAddress('');
+                    setSendAmount('');
+                    fetchBalance(wallet.address);
+                  },
+                },
+              ]);
+            } catch (error: any) {
+              console.error('Transaction error:', error);
+              Alert.alert('Transaction Failed', error.message || 'Failed to send transaction');
+            } finally {
+              setIsSending(false);
+            }
+          },
+        },
+      ]
+    );
   };
 
   const formatAddress = (address: string) => {
@@ -304,14 +393,14 @@ export default function App() {
 
               {/* Actions */}
               <View style={styles.actionsContainer}>
-                <TouchableOpacity style={styles.actionButton}>
+                <TouchableOpacity style={styles.actionButton} onPress={() => openModal('send')}>
                   <View style={styles.actionIconContainer}>
                     <View style={styles.actionIconSend} />
                   </View>
                   <Text style={styles.actionText}>Send</Text>
                 </TouchableOpacity>
 
-                <TouchableOpacity style={styles.actionButton}>
+                <TouchableOpacity style={styles.actionButton} onPress={() => openModal('receive')}>
                   <View style={styles.actionIconContainer}>
                     <View style={styles.actionIconReceive} />
                   </View>
@@ -524,9 +613,154 @@ export default function App() {
                     </TouchableOpacity>
                   </View>
                 )}
+
+                {modalType === 'receive' && wallet && (
+                  <View style={styles.modalBody}>
+                    <View style={styles.qrContainer}>
+                      <QRCode
+                        value={wallet.address}
+                        size={240}
+                        backgroundColor="#FFFFFF"
+                        color="#000000"
+                      />
+                    </View>
+                    <Text style={styles.receiveTitle}>Your Wallet Address</Text>
+                    <TouchableOpacity 
+                      style={styles.receiveAddressContainer}
+                      onPress={() => copyToClipboard(wallet.address, 'Address')}
+                    >
+                      <Text style={styles.receiveAddress}>{wallet.address}</Text>
+                      <View style={styles.receiveAddressCopy}>
+                        <View style={styles.copyIconSquare} />
+                      </View>
+                    </TouchableOpacity>
+                    <Text style={styles.receiveDescription}>
+                      Scan this QR code or tap the address above to copy it
+                    </Text>
+                  </View>
+                )}
+
+                {modalType === 'send' && wallet && (
+                  <View style={styles.modalBody}>
+                    {sendStep === 'address' ? (
+                      <>
+                        <Text style={styles.sendLabel}>Recipient Address</Text>
+                        <TextInput
+                          style={styles.sendInput}
+                          placeholder="0x..."
+                          placeholderTextColor="#4A4B50"
+                          value={recipientAddress}
+                          onChangeText={setRecipientAddress}
+                          autoCapitalize="none"
+                          autoCorrect={false}
+                        />
+                        
+                        <TouchableOpacity
+                          style={styles.scanButton}
+                          onPress={() => {
+                            if (permission?.granted) {
+                              setShowScanner(true);
+                            } else {
+                              requestPermission();
+                            }
+                          }}
+                        >
+                          <Text style={styles.scanButtonText}>Scan QR Code</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity 
+                          style={styles.modalButton} 
+                          onPress={validateAndProceedToAmount}
+                        >
+                          <LinearGradient
+                            colors={['#E84142', '#C8373D']}
+                            style={styles.modalButtonGradient}
+                          >
+                            <Text style={styles.modalButtonText}>Next</Text>
+                          </LinearGradient>
+                        </TouchableOpacity>
+                      </>
+                    ) : (
+                      <>
+                        <Text style={styles.sendLabel}>Send To</Text>
+                        <View style={styles.sendToContainer}>
+                          <Text style={styles.sendToAddress}>
+                            {formatAddress(recipientAddress)}
+                          </Text>
+                          <TouchableOpacity onPress={() => setSendStep('address')}>
+                            <Text style={styles.sendToEdit}>Edit</Text>
+                          </TouchableOpacity>
+                        </View>
+
+                        <Text style={styles.sendLabel}>Amount (AVAX)</Text>
+                        <TextInput
+                          style={styles.sendInput}
+                          placeholder="0.00"
+                          placeholderTextColor="#4A4B50"
+                          value={sendAmount}
+                          onChangeText={setSendAmount}
+                          keyboardType="decimal-pad"
+                        />
+                        
+                        <View style={styles.balanceInfo}>
+                          <Text style={styles.balanceInfoText}>Available: {balance} AVAX</Text>
+                          <TouchableOpacity onPress={() => setSendAmount(balance)}>
+                            <Text style={styles.maxButton}>MAX</Text>
+                          </TouchableOpacity>
+                        </View>
+
+                        <TouchableOpacity 
+                          style={styles.modalButton} 
+                          onPress={sendTransaction}
+                          disabled={isSending}
+                        >
+                          <LinearGradient
+                            colors={['#E84142', '#C8373D']}
+                            style={styles.modalButtonGradient}
+                          >
+                            <Text style={styles.modalButtonText}>
+                              {isSending ? 'Sending...' : 'Send'}
+                            </Text>
+                          </LinearGradient>
+                        </TouchableOpacity>
+                      </>
+                    )}
+                  </View>
+                )}
               </ScrollView>
             </View>
           </View>
+        </View>
+      </Modal>
+
+      {/* QR Scanner Modal */}
+      <Modal
+        visible={showScanner}
+        animationType="slide"
+        transparent={false}
+        onRequestClose={() => setShowScanner(false)}
+      >
+        <View style={styles.scannerContainer}>
+          <CameraView
+            style={styles.camera}
+            facing="back"
+            onBarcodeScanned={handleQRScanned}
+          >
+            <View style={styles.scannerOverlay}>
+              <View style={styles.scannerHeader}>
+                <TouchableOpacity 
+                  onPress={() => setShowScanner(false)}
+                  style={styles.scannerClose}
+                >
+                  <Text style={styles.scannerCloseText}>✕ Close</Text>
+                </TouchableOpacity>
+              </View>
+              <View style={styles.scannerFrame}>
+                <View style={styles.scannerCorner} />
+              </View>
+              <Text style={styles.scannerText}>Scan QR Code</Text>
+            </View>
+          </CameraView>
         </View>
       </Modal>
     </View>
@@ -1046,5 +1280,160 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '600',
     color: '#E84142',
+  },
+  // Receive Modal
+  qrContainer: {
+    alignItems: 'center',
+    marginVertical: 30,
+    padding: 20,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    alignSelf: 'center',
+  },
+  receiveTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FFFFFF',
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  receiveAddressContainer: {
+    backgroundColor: '#0A0B0D',
+    borderRadius: 12,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#2A2B30',
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  receiveAddress: {
+    flex: 1,
+    fontSize: 12,
+    color: '#FFFFFF',
+    fontWeight: '500',
+  },
+  receiveAddressCopy: {
+    marginLeft: 12,
+    width: 16,
+    height: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  receiveDescription: {
+    fontSize: 13,
+    color: '#8B8C94',
+    textAlign: 'center',
+    lineHeight: 18,
+  },
+  // Send Modal
+  sendLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#FFFFFF',
+    marginBottom: 12,
+  },
+  sendInput: {
+    backgroundColor: '#0A0B0D',
+    borderRadius: 12,
+    padding: 16,
+    color: '#FFFFFF',
+    fontSize: 14,
+    borderWidth: 1,
+    borderColor: '#2A2B30',
+    marginBottom: 16,
+  },
+  scanButton: {
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: '#2A2B30',
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  scanButtonText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#FFFFFF',
+  },
+  sendToContainer: {
+    backgroundColor: '#0A0B0D',
+    borderRadius: 12,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#2A2B30',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  sendToAddress: {
+    fontSize: 14,
+    color: '#FFFFFF',
+    fontWeight: '500',
+  },
+  sendToEdit: {
+    fontSize: 14,
+    color: '#E84142',
+    fontWeight: '500',
+  },
+  balanceInfo: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  balanceInfoText: {
+    fontSize: 13,
+    color: '#8B8C94',
+  },
+  maxButton: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#E84142',
+  },
+  // Scanner
+  scannerContainer: {
+    flex: 1,
+    backgroundColor: '#000000',
+  },
+  camera: {
+    flex: 1,
+  },
+  scannerOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  },
+  scannerHeader: {
+    paddingTop: 60,
+    paddingHorizontal: 20,
+  },
+  scannerClose: {
+    alignSelf: 'flex-start',
+  },
+  scannerCloseText: {
+    fontSize: 16,
+    color: '#FFFFFF',
+    fontWeight: '600',
+  },
+  scannerFrame: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  scannerCorner: {
+    width: 250,
+    height: 250,
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+    borderRadius: 12,
+  },
+  scannerText: {
+    fontSize: 16,
+    color: '#FFFFFF',
+    fontWeight: '600',
+    textAlign: 'center',
+    marginBottom: 100,
   },
 });
