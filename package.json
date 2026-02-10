@@ -9,10 +9,20 @@
     "web": "expo start --web"
   },
   "dependencies": {
+    "@react-native-async-storage/async-storage": "^1.24.0",
+    "@walletconnect/ethereum-provider": "^2.23.4",
+    "@walletconnect/modal-react-native": "^1.1.0",
+    "@walletconnect/react-native-compat": "^2.23.4",
+    "ethers": "^6.16.0",
     "expo": "~54.0.33",
+    "expo-clipboard": "^8.0.8",
+    "expo-linear-gradient": "^15.0.8",
+    "expo-secure-store": "^15.0.8",
     "expo-status-bar": "~3.0.9",
     "react": "19.1.0",
-    "react-native": "0.81.5"
+    "react-native": "0.81.5",
+    "react-native-get-random-values": "^2.0.0",
+    "react-native-svg": "^15.15.3"
   },
   "devDependencies": {
     "@types/react": "~19.1.0",
