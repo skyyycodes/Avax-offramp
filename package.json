@@ -4,12 +4,17 @@
   "main": "index.ts",
   "scripts": {
     "start": "expo start",
-    "android": "expo start --android",
-    "ios": "expo start --ios",
+    "android": "expo run:android",
+    "ios": "expo run:ios",
     "web": "expo start --web"
   },
   "dependencies": {
-    "@react-native-async-storage/async-storage": "^1.24.0",
+    "@react-native-async-storage/async-storage": "2.2.0",
+    "@react-native-community/netinfo": "11.4.1",
+    "@react-navigation/native": "^7.1.33",
+    "@react-navigation/native-stack": "^7.14.4",
+    "@react-navigation/stack": "^7.8.4",
+    "@reduxjs/toolkit": "^2.11.2",
     "@walletconnect/ethereum-provider": "^2.23.4",
     "@walletconnect/modal-react-native": "^1.1.0",
     "@walletconnect/react-native-compat": "^2.23.4",
@@ -22,12 +27,17 @@
     "expo-status-bar": "~3.0.9",
     "react": "19.1.0",
     "react-native": "0.81.5",
-    "react-native-get-random-values": "^2.0.0",
+    "react-native-gesture-handler": "~2.20.2",
+    "react-native-get-random-values": "~1.11.0",
     "react-native-qrcode-svg": "^6.3.21",
-    "react-native-svg": "^15.15.3"
+    "react-native-safe-area-context": "~5.6.0",
+    "react-native-screens": "~4.16.0",
+    "react-native-svg": "15.12.1",
+    "react-redux": "^9.2.0"
   },
   "devDependencies": {
     "@types/react": "~19.1.0",
+    "react-native-svg-transformer": "^1.5.3",
     "typescript": "~5.9.2"
   },
   "private": true
