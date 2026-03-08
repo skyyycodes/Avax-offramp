@@ -31,8 +31,9 @@
     "plugins": [],
     "extra": {
       "eas": {
-        "projectId": "ccd609ab-c7db-4acb-b236-d79e99fb04cf"
+        "projectId": "ad3c687b-b712-4044-96ab-66d3d3cf094b"
       }
-    }
+    },
+    "owner": "eshan_2703"
   }
 }
