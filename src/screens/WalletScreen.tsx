@@ -462,7 +462,7 @@ export default function WalletScreen() {
                   <View style={styles.capsuleIconCard}>
                     <View style={styles.capsuleIconCardChip} />
                   </View>
-                  <Text style={styles.actionCapsuleText}>Pay Bill</Text>
+                  <Text style={styles.actionCapsuleText}>UPI Pay</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
